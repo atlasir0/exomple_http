@@ -11,7 +11,7 @@ import (
 
 const (
 	BotToken   = "7145361114:AAGcDmLWHv9eyeQTjcj1djRA1oDcCJBmuKg"
-	WebhookURL = "https://3913-178-207-154-253.ngrok-free.app"
+	WebhookURL = "https://87af-178-207-154-253.ngrok-free.app"
 )
 
 var rss = map[string]string{
@@ -27,51 +27,60 @@ type Item struct {
 	Title string `xml:"title"`
 }
 
-func main() {
+func initializeBot() (*tgbotapi.BotAPI, error) {
 	bot, err := tgbotapi.NewBotAPI(BotToken)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-
 	fmt.Printf("Authorized on account %s\n", bot.Self.UserName)
+	return bot, nil
+}
 
-	_, err = bot.SetWebhook(tgbotapi.NewWebhook(WebhookURL))
-	if err != nil {
-		panic(err)
-	}
+func setWebhook(bot *tgbotapi.BotAPI) error {
+	_, err := bot.SetWebhook(tgbotapi.NewWebhook(WebhookURL))
+	return err
+}
 
+func startListening(bot *tgbotapi.BotAPI) {
 	updates := bot.ListenForWebhook("/")
 	go http.ListenAndServe(":8080", nil)
 	fmt.Println("start listen :8080")
 
 	for update := range updates {
-		switch update.Message.Text {
-		case "/help":
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Available commands:\n"+
-				"/help - Show available commands\n"+
-				"Enter 'Habr' to get news from Habr")
-			bot.Send(msg)
-		default:
-			if url, ok := rss[update.Message.Text]; ok {
-				rss, err := getNews(url)
-				if err != nil {
-					bot.Send(tgbotapi.NewMessage(
-						update.Message.Chat.ID,
-						"sorry, error happened",
-					))
-				}
-				for _, item := range rss.Items {
-					bot.Send(tgbotapi.NewMessage(
-						update.Message.Chat.ID,
-						item.URL+"\n"+item.Title,
-					))
-				}
-			} else {
+		handleMessage(bot, update)
+	}
+}
+
+func handleMessage(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	switch update.Message.Text {
+	case "/help":
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Available commands:\n"+
+			"/help - Show available commands\n"+
+			"Enter 'Habr' to get news from Habr")
+		bot.Send(msg)
+	case "/add":
+		add := tgbotapi.NewMessage(update.Message.Chat.ID, "if you want add new file enter:\n"+"/add")
+		bot.Send(add)
+	default:
+		if url, ok := rss[update.Message.Text]; ok {
+			rss, err := getNews(url)
+			if err != nil {
 				bot.Send(tgbotapi.NewMessage(
 					update.Message.Chat.ID,
-					"there is only Habr feed available",
+					"sorry, error happened",
 				))
 			}
+			for _, item := range rss.Items {
+				bot.Send(tgbotapi.NewMessage(
+					update.Message.Chat.ID,
+					item.URL+"\n"+item.Title,
+				))
+			}
+		} else {
+			bot.Send(tgbotapi.NewMessage(
+				update.Message.Chat.ID,
+				"there is only Habr feed available",
+			))
 		}
 	}
 }
@@ -95,4 +104,22 @@ func getNews(url string) (*RSS, error) {
 	}
 
 	return rss, nil
+}
+
+func dop() {
+	bot, err := initializeBot()
+	if err != nil {
+		panic(err)
+	}
+
+	err = setWebhook(bot)
+	if err != nil {
+		panic(err)
+	}
+
+	startListening(bot)
+}
+
+func main() {
+	dop()
 }
